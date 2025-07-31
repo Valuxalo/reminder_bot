@@ -77,6 +77,7 @@ async def process_name_sent(message: Message, state: FSMContext):
     df = pd.read_csv(PATH_TODO_TABLE, encoding='utf-8')
     try:
         date_obj = datetime.strptime(text, "%d.%m.%Y").date()
+        print(COUNTER, '___', date_obj)
         df.at[COUNTER - 1, 'end_time'] = date_obj
         df.to_csv(PATH_TODO_TABLE, index=False, encoding='utf-8')
         keyboard: list[list[InlineKeyboardButton]] = cnts_btns()
@@ -112,13 +113,15 @@ async def process_name_sent(callback: CallbackQuery, state: FSMContext):
         freq = str(text)
         df['freq'] = df['freq'].astype(str)
         df.at[COUNTER - 1, 'freq'] =  freq
+        end_time = df.at[COUNTER - 1, 'end_time']
         next_time = df.at[COUNTER - 1,  'next_time']
         df.to_csv(PATH_TODO_TABLE, index=False, encoding='utf-8')
         await add_schedule_for_user(
             bot = callback.bot,
             id = COUNTER,
             chat_id=callback.from_user.id,
-            schedule_time = freq,
+            schedule_time=freq,
+            end_date=end_time,
             next_time = next_time
         )
         COUNTER +=1 
@@ -141,6 +144,7 @@ async def process_name_sent(callback: CallbackQuery, state: FSMContext):
     freq = str(text)
     df['freq'] = df['freq'].astype(str)
     df.at[COUNTER - 1, 'freq'] =  freq
+    end_time = df.at[COUNTER - 1, 'end_time']
     next_time = df.at[COUNTER - 1,  'next_time']
     df.to_csv(PATH_TODO_TABLE, index=False, encoding='utf-8')
     await add_schedule_for_user(
@@ -148,6 +152,7 @@ async def process_name_sent(callback: CallbackQuery, state: FSMContext):
             id = COUNTER,
             chat_id=callback.from_user.id,
             schedule_time = freq,
+            end_date=end_time,
             next_time = next_time
         )
     COUNTER +=1 
@@ -163,6 +168,7 @@ async def process_name_sent(message: Message, state: FSMContext):
     freq = str(text)
     df['freq'] = df['freq'].astype(str)
     df.at[COUNTER - 1, 'freq'] =  freq
+    end_time = df.at[COUNTER - 1, 'end_time']
     next_time = df.at[COUNTER - 1,  'next_time']
     df.to_csv(PATH_TODO_TABLE, index=False, encoding='utf-8')
     await add_schedule_for_user(
@@ -170,6 +176,7 @@ async def process_name_sent(message: Message, state: FSMContext):
             id = COUNTER,
             chat_id=message.chat.id,
             schedule_time = freq,
+            end_date=end_time,
             next_time = next_time
         )
     COUNTER +=1 
@@ -181,12 +188,13 @@ async def process_all_command(message: Message):
     logger.info('/all')
     df = pd.read_csv(PATH_TODO_TABLE, encoding='utf-8')
     filt_df = df[df['user_id'] == int(message.from_user.id)]
-    filt_col_df = filt_df[['id', 'next_time', 'end_time']]
+    filt_col_df = filt_df[['id', 'text', 'end_time']]
     await message.answer(f"<pre>{filt_col_df.to_markdown(index=False)}</pre>", parse_mode=ParseMode.HTML)
 
 @router.message(Command(commands='done'))
 async def process_done_command(message: Message, state: FSMContext):
     logger.info(message.text)
+    global COUNTER
     try:
         num = int(message.text.split(' ', 1)[1])
         if 1 <= num < COUNTER:
@@ -198,6 +206,11 @@ async def process_done_command(message: Message, state: FSMContext):
                 chat_id=message.chat.id,
         )
             await message.answer(text=LEXICON['reminder_done'])
+            try:
+                last_row = df.iloc[-1]
+                COUNTER = last_row['id'] + 1
+            except:
+                COUNTER = 1
         else:
             await message.answer(text=LEXICON['reminder_not_numb'])
         await state.clear()
@@ -208,10 +221,11 @@ async def process_done_command(message: Message, state: FSMContext):
 @router.message(StateFilter(FSMFillForm.fill_done), F.text.isdigit)
 async def process_name_sent(message: Message, state: FSMContext):
     logger.info(message.text)
+    global COUNTER
     num = int(message.text)
     if 1 <= num < COUNTER:
         df = pd.read_csv(PATH_TODO_TABLE, encoding='utf-8')
-        df.loc[df['id'] == num, ['next_time', 'end_time']] = ['None', 'None']
+        df = df[df['id'] != num]
         df.to_csv(PATH_TODO_TABLE, index=False, encoding='utf-8')
         await del_schedule_for_user(
                 id = num,
@@ -219,6 +233,11 @@ async def process_name_sent(message: Message, state: FSMContext):
         )
         await message.answer(text=LEXICON['reminder_done'])
         await state.clear()
+        try:
+            last_row = df.iloc[-1]
+            COUNTER = last_row['id'] + 1
+        except:
+            COUNTER = 1
     else:
         await message.answer(text=LEXICON['task_not_numb'])
 
@@ -226,8 +245,14 @@ async def process_name_sent(message: Message, state: FSMContext):
 async def process_cancel_command(message: Message):
     global COUNTER
     logger.info('/clear')
-    df = pd.read_csv(PATH_TODO_TABLE, encoding='utf-8')
     USER_ID = int(message.from_user.id)
+    df = pd.read_csv(PATH_TODO_TABLE, encoding='utf-8')
+    ids = df.loc[df['user_id'] == USER_ID, 'id'].tolist()
+    for idx in ids:
+        await del_schedule_for_user(
+                id = idx,
+                chat_id=message.chat.id,
+        )
     df = df[df['user_id'] != USER_ID]
     try:
         last_row = df.iloc[-1]
