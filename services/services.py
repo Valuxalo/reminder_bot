@@ -9,8 +9,10 @@ def delete_data(PATH_TODO_TABLE) -> None:
 def cnt_days(row, future_obj):
     current_date = datetime.now()
     future_date = datetime.strptime(future_obj, "%Y-%m-%d")
-    time_left = (future_date - current_date).days
-    if time_left % 10 == 1:
+    time_left = (future_date - current_date).days + 1
+    if time_left in [11, 12, 13, 14]:
+        ff_row = f"{row}: {time_left} дней"
+    elif time_left % 10 == 1:
         ff_row = f"{row}: {time_left} день"
     elif time_left % 10 in [2, 3, 4]:
         ff_row = f"{row}: {time_left} дня"

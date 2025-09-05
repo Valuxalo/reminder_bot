@@ -1,7 +1,7 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from typing import Callable, Any, Coroutine
 from apscheduler.triggers.cron import CronTrigger
-import asyncio
+from datetime import datetime, timedelta
 from aiogram import Bot
 import pandas as pd
 from services.services import cnt_days
@@ -44,11 +44,12 @@ async def add_schedule_for_user(bot: Bot, id: int, chat_id: int,
         day1, day2 = map(int, schedule_time.split())
         trigger = CronTrigger(day=day2, hour=hour, minute=minute)
     idx = f"user_{chat_id}_{id}"
+    end_date_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(hours=23, minutes=59)
     scheduler.add_job(
             send_user_message,
             trigger=trigger,
             args=[bot, chat_id, id],
-            end_date=end_date,
+            end_date=end_date_dt,
             id=idx,  # Уникальный ID задачи (чтобы потом удалить)
     )
     job = scheduler.get_job(idx)
